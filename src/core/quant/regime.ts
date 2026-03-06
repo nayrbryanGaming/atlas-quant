@@ -1,26 +1,42 @@
-import { Regime } from '../../domain/signal';
+import { MarketRegime } from '@/domain/signal';
+import { exponentialMovingAverage } from '@/utils/math';
+
+export interface RegimeParams {
+    regime: MarketRegime;
+    ema: number;
+    slope: number;
+}
 
 /**
- * Classifies market regime based on simple moving averages and price relative to them.
- * Pure deterministic logic.
+ * 1. Trend Backbone (Regime Filter)
+ * Fungsi: Menentukan Bull / Bear / Neutral
+ * Logika: MA yang di-smooth, Slope lebih penting dari posisi candle
  */
-export function classifyRegime(currentPrice: number, recentPrices: number[]): Regime {
-    if (recentPrices.length < 50) return 'neutral';
+export const detectRegime = (closes: number[], length: number = 50): RegimeParams => {
+    if (closes.length < length + 5) {
+        return { regime: 'neutral', ema: 0, slope: 0 };
+    }
 
-    // Compute Simple Moving Average (SMA) 20 and SMA 50
-    const sma20 = recentPrices.slice(-20).reduce((a, b) => a + b, 0) / 20;
-    const sma50 = recentPrices.slice(-50).reduce((a, b) => a + b, 0) / 50;
+    const emaValues = exponentialMovingAverage(closes, length);
+    const currentEMA = emaValues[emaValues.length - 1];
+    const prevEMA = emaValues[emaValues.length - 5]; // 5-bar lookback for slope
+    const currentClose = closes[closes.length - 1];
 
-    const isBull = currentPrice > sma20 && sma20 > sma50;
-    const isBear = currentPrice < sma20 && sma20 < sma50;
+    const slope = currentEMA - prevEMA;
 
-    // Late trend: Price is crossing SMAs but SMAs are still aligned
-    const isLateBull = currentPrice < sma20 && sma20 > sma50;
-    const isLateBear = currentPrice > sma20 && sma20 < sma50;
+    let regime: MarketRegime = 'neutral';
 
-    if (isBull) return 'bull';
-    if (isBear) return 'bear';
-    if (isLateBull || isLateBear) return 'late_trend';
+    // T1MO Logic: Position + Slope direction
+    // If close > MA and slope > 0 -> BULL
+    // If close < MA and slope < 0 -> BEAR
+    // Else -> NEUTRAL
+    if (currentClose > currentEMA && slope > 0) {
+        regime = 'bull';
+    } else if (currentClose < currentEMA && slope < 0) {
+        regime = 'bear';
+    } else {
+        regime = 'neutral';
+    }
 
-    return 'neutral';
-}
+    return { regime, ema: currentEMA, slope };
+};

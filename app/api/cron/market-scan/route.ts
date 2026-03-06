@@ -1,52 +1,89 @@
 import { NextResponse } from 'next/server';
-import { fetchGlobalMarketSnapshot, fetchOHLC, normalizeCandles } from '@/src/services/market/coingecko';
-import { analyzeMarket } from '@/src/core/quant';
-import { cache } from '@/src/core/cache/runtime';
+import { ENV } from '@/config/env';
+import { CONSTANTS } from '@/config/constants';
+import { CoinGeckoProvider } from '@/services/market/coingecko';
+import { analyzeMarket, measureVolatility } from '@/core/quant';
+import { GroqAssist } from '@/core/ai/groq';
+import { signalCache } from '@/core/cache/runtime';
+import { AssetSignals, MarketScanData } from '@/domain/signal';
+import { logger } from '@/utils/logger';
+import { getUnixTimestamp } from '@/utils/time';
 
-/**
- * Scheduled Cron Job: Market Scan
- * Runs every 15 minutes.
- */
+// Max duration for Vercel Hobby/Pro Serverless
+export const maxDuration = 60;
+
 export async function GET(request: Request) {
-    const { searchParams } = new URL(request.url);
-    const secret = searchParams.get('secret');
-
-    if (secret !== process.env.CRON_SECRET && process.env.NODE_ENV === 'production') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     try {
-        // 1. Global Scan
-        const markets = await fetchGlobalMarketSnapshot();
-
-        // 2. Filter Active Universe (Top 10 for demo/free tier)
-        const activeUniverse = markets.slice(0, 10);
-
-        const signals: Record<string, any> = {};
-
-        for (const asset of activeUniverse) {
-            // 3. OHLC Fetch
-            const ohlc = await fetchOHLC(asset.id);
-            const quantInput = normalizeCandles(ohlc);
-            quantInput.symbol = asset.symbol.toUpperCase();
-
-            // 4. Quant Core Analysis
-            const output = analyzeMarket(quantInput);
-
-            signals[asset.symbol] = {
-                ...output,
-                lastPrice: asset.current_price,
-                name: asset.name
-            };
+        const authHeader = request.headers.get('authorization');
+        if (authHeader !== `Bearer ${ENV.CRON_SECRET}`) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // 5. Store in Cache
-        cache.set('market_signals', signals);
-        cache.set('last_scan_ts', Date.now());
+        logger.info('Starting Cron Market Scan');
+        const marketProvider = new CoinGeckoProvider();
+        const aiAssist = new GroqAssist();
 
-        return NextResponse.json({ success: true, timestamp: Date.now() });
-    } catch (error: any) {
-        console.error('Cron failed:', error.message);
-        return NextResponse.json({ error: 'Scan failed' }, { status: 500 });
+        // 1. Fetch Global Snapshot and Filter Active Universe
+        const globalScan = await marketProvider.getGlobalScan();
+        if (globalScan.length === 0) {
+            throw new Error('Global scan returned empty, aborting.');
+        }
+
+        // Filter Top N by volume
+        const activeUniverse = globalScan
+            .sort((a: MarketScanData, b: MarketScanData) => b.volume24h - a.volume24h)
+            .slice(0, CONSTANTS.MAX_ACTIVE_UNIVERSE);
+
+        const snapshotSignals: AssetSignals[] = [];
+
+        // 2. Process Active Universe
+        for (const asset of activeUniverse) {
+            try {
+                const ohlc = await marketProvider.getOHLC(asset.symbol, CONSTANTS.CANDLES_TO_FETCH);
+                if (ohlc.length < 50) {
+                    logger.warn(`Insufficient OHLC data for ${asset.symbol}`);
+                    continue;
+                }
+
+                const quantOutput = analyzeMarket({ symbol: asset.symbol, candles: ohlc });
+
+                // Updated T1MO signatures (measureVolatility uses H-L-C)
+                const high = ohlc.map(c => c.high);
+                const low = ohlc.map(c => c.low);
+                const close = ohlc.map(c => c.close);
+
+                let aiOutput = undefined;
+                if (ENV.FEATURE_AI_ENABLED) {
+                    // Pass only quantOutput to AI as per contract
+                    aiOutput = await aiAssist.analyzeContext(quantOutput);
+                }
+
+                const signal: AssetSignals = {
+                    symbol: asset.symbol,
+                    price: close[close.length - 1],
+                    quant: quantOutput,
+                    ai: aiOutput,
+                    timestamp: getUnixTimestamp(),
+                };
+
+                snapshotSignals.push(signal);
+
+                // Cache individually and globally
+                signalCache.set(`signal:${asset.symbol}`, signal, CONSTANTS.CACHE_TTL_MS);
+                signalCache.set(`candles:${asset.symbol}`, ohlc, CONSTANTS.CACHE_TTL_MS);
+            } catch (err) {
+                logger.error(`Failed to process asset ${asset.symbol}`, err);
+            }
+        }
+
+        // Cache the whole snapshot list
+        signalCache.set('signal:snapshot', snapshotSignals, CONSTANTS.CACHE_TTL_MS);
+        signalCache.set('active_universe', activeUniverse, CONSTANTS.CACHE_TTL_MS);
+
+        logger.info(`Cron finished successfully. Processed ${snapshotSignals.length} assets.`);
+        return NextResponse.json({ success: true, processed: snapshotSignals.length });
+    } catch (error) {
+        logger.error('CRON Fatal Error', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

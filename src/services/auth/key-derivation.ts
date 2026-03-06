@@ -1,18 +1,20 @@
-import { crypto } from 'crypto';
+import { Keypair } from '@solana/web3.js';
+import crypto from 'crypto';
 
 /**
- * Deterministically derives a secret key from username and password.
- * This is a simplified version for implementation.
+ * Derives a deterministic Solana keypair from a username and password.
+ * The password and private key are NEVER stored on the server.
  */
-export async function deriveKey(username: string, password: string): Promise<string> {
-    // In production, use PBKDF2 or Argon2
-    const input = `${username}:${password}:atlas-salt`;
-    const encoder = new TextEncoder();
-    const data = encoder.encode(input);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    return Buffer.from(hash).toString('hex');
-}
+export const deriveKeypair = (username: string, password: string): Keypair => {
+    // We use a deterministic approach: pbkdf2 with a fixed salt based on the username.
+    // In a real application, consider a strong KDF like Argon2 in the browser,
+    // and only sending the public key and signed challenge to the server.
+    // However, the spec allows key derivation client-side or server-side as long as 
+    // the password is never stored or logged and the private key is not persisted.
 
-export function generateChallenge(publicKey: string): string {
-    return `atlas-auth-${publicKey}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-}
+    // Create a deterministic 32-byte seed from username and password
+    const salt = crypto.createHash('sha256').update(`atlas_quant_${username}`).digest();
+    const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+
+    return Keypair.fromSeed(key);
+};

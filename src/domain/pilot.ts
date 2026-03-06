@@ -1,16 +1,17 @@
-export type PositionDirection = 'long' | 'short' | 'flat';
+export type PositionState = 'long' | 'short' | 'flat';
 
 export interface PilotState {
     symbol: string;
-    position: PositionDirection;
-    entry_price: number | null;
+    position: PositionState;
+    entry_price: number;
     unrealized_pnl: number;
     realized_pnl: number;
+    last_update: number;
 }
 
 export interface PilotAction {
     symbol: string;
     action: 'enter' | 'exit';
-    signalBias: 'long' | 'short';
-    currentPrice: number;
+    price: number;
+    timestamp: number;
 }

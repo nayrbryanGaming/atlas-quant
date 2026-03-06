@@ -1,22 +1,41 @@
-/**
- * Measures price momentum and flags if there is strong momentum or exhaustion.
- * Deterministic logic.
- */
-export function analyzeMomentum(recentPrices: number[]): { score: number; isExhausted: boolean } {
-    if (recentPrices.length < 14) return { score: 0, isExhausted: false };
+import { exponentialMovingAverage } from '@/utils/math';
 
-    // Calculate a simple Rate of Change (ROC) over 14 periods
-    const currentPrice = recentPrices[recentPrices.length - 1];
-    const price14PeriodsAgo = recentPrices[recentPrices.length - 14];
-
-    const roc = (currentPrice - price14PeriodsAgo) / price14PeriodsAgo;
-
-    // Let's define a basic exhaustion metric: 
-    // If price has moved more than 20% in 14 periods, we flag it as potentially exhausted.
-    const isExhausted = Math.abs(roc) > 0.20;
-
-    // Score is mapped to [-1, 1] roughly, capped.
-    const score = Math.max(-1, Math.min(1, roc * 5));
-
-    return { score, isExhausted };
+export interface MomentumParams {
+    state: 'STRONG_UP' | 'STRONG_DOWN' | 'WEAKENING';
+    value: number;
 }
+
+/**
+ * 3. Momentum Structure (Bukan RSI)
+ * Fungsi: Konfirmasi trend masih sehat atau mulai capek
+ * Logika: Delta harga → di-smooth, Dilihat naik/turun bertahap
+ */
+export const analyzeMomentum = (close: number[], smooth: number = 10): MomentumParams => {
+    if (close.length < smooth + 5) {
+        return { state: 'WEAKENING', value: 0 };
+    }
+
+    // T1MO Logic: Delta harga (current - previous)
+    const deltas: number[] = [];
+    for (let i = 1; i < close.length; i++) {
+        deltas.push(close[i] - close[i - 1]);
+    }
+
+    // T1MO Logic: EMA of deltas
+    const momValues = exponentialMovingAverage(deltas, smooth);
+    const currentMom = momValues[momValues.length - 1];
+    const prevMom = momValues[momValues.length - 3]; // Compare vs 3 bars ago
+
+    let state: 'STRONG_UP' | 'STRONG_DOWN' | 'WEAKENING' = 'WEAKENING';
+
+    // T1MO Logic: Check for strength and direction
+    if (currentMom > 0 && currentMom > prevMom) {
+        state = 'STRONG_UP';
+    } else if (currentMom < 0 && currentMom < prevMom) {
+        state = 'STRONG_DOWN';
+    } else {
+        state = 'WEAKENING';
+    }
+
+    return { state, value: currentMom };
+};

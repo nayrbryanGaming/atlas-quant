@@ -1,12 +1,15 @@
+export interface UserIdentity {
+  publicKey: string;
+}
+
 export interface UserSession {
   publicKey: string;
-  isApproved: boolean;
-  balanceSol: number;
+  token: string;
   expiresAt: number;
 }
 
 export interface AuthChallenge {
-  publicKey: string;
-  nonce: string;
-  timestamp: number;
+  message: string;
+  expiresAt: number;
+  serverSig?: string; // Signature from server to ensure stateless authenticity
 }

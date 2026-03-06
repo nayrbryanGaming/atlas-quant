@@ -1,74 +1,104 @@
-import { QuantInput, QuantOutput, Regime, Bias } from '../../domain/signal';
-import { classifyRegime } from './regime';
-import { analyzeVolatility } from './volatility';
+import { OHLC, QuantOutput, DirectionalBias } from '@/domain/signal';
+import { clamp, calculateATR } from '@/utils/math';
+import { detectRegime } from './regime';
+import { measureVolatility } from './volatility';
 import { analyzeMomentum } from './momentum';
 import { evaluateRisk } from './risk';
 
+export { detectRegime } from './regime';
+export { measureVolatility } from './volatility';
+export { analyzeMomentum } from './momentum';
+export { evaluateRisk } from './risk';
+
+export interface QuantInput {
+    symbol: string;
+    candles: OHLC[];
+}
+
 /**
- * Main entry point for Quant Core.
- * Pure deterministic function analyzing market summary data and emitting a decision.
+ * 5. Composite Decision Layer (Bukan Indikator)
+ * Fungsi: Menggabungkan 4 modul di atas menghasilkan LONG / SHORT / NO TRADE
+ * Logika: Rule-based, Risk-first, Tidak memaksa trade
  */
-export function analyzeMarket(input: QuantInput): QuantOutput {
-    const currentPrice = input.currentPrice;
-    const recentPrices = input.recentPrices;
-
-    // 1. Regime
-    const regime = classifyRegime(currentPrice, recentPrices);
-
-    // 2. Volatility
-    const vol = analyzeVolatility(recentPrices);
-
-    // 3. Momentum
-    const mom = analyzeMomentum(recentPrices);
-
-    // 4. Baseline distance for risk
-    let distanceFromBaseline = 0;
-    if (recentPrices.length >= 50) {
-        const sma50 = recentPrices.slice(-50).reduce((a, b) => a + b, 0) / 50;
-        distanceFromBaseline = (currentPrice - sma50) / sma50;
+export const analyzeMarket = (input: QuantInput): QuantOutput => {
+    if (input.candles.length < 60) {
+        return { regime: 'neutral', bias: 'no_trade', confidence: 0, risk_flags: ['BOOTING_NODES'] };
     }
 
-    // 5. Risk Filter
-    const risk_flags = evaluateRisk({
-        regime,
-        volatilityAbnormal: vol.isAbnormal,
-        momentumExhausted: mom.isExhausted,
-        distanceFromBaseline
-    });
+    const high = input.candles.map(c => c.high);
+    const low = input.candles.map(c => c.low);
+    const close = input.candles.map(c => c.close);
+    const lastClose = close[close.length - 1];
 
-    // 6. Signal Decision
-    let bias: Bias = 'no_trade';
-    let confidence = 0.5; // Base confidence
+    // 1. Trend Backbone (Regime Filter)
+    const trendNode = detectRegime(close);
 
-    if (regime === 'bull' && !risk_flags.includes('MOMENTUM_EXHAUSTION')) {
-        bias = 'long';
-        confidence = 0.7 + (mom.score > 0 ? 0.2 : 0);
-    } else if (regime === 'bear' && !risk_flags.includes('MOMENTUM_EXHAUSTION')) {
-        bias = 'short';
-        confidence = 0.7 + (mom.score < 0 ? 0.2 : 0);
-    } else if (regime === 'late_trend') {
-        bias = 'no_trade';
-        confidence = 0.3; // Low confidence
-    }
+    // 2. Volatility Box (Market Acceptance)
+    const boxNode = measureVolatility(high, low, close);
 
-    // If volatility is dangerously abnormal, we drop confidence and maybe flat.
-    if (vol.isAbnormal) {
-        confidence -= 0.3;
-        if (confidence < 0.4) bias = 'no_trade';
-    }
+    // 3. Momentum Structure (Health Check)
+    const momNode = analyzeMomentum(close);
 
-    if (risk_flags.length >= 2) {
+    // 4. Distance Filter (Risk Overextension)
+    const atrValues = calculateATR(high, low, close, 14);
+    const currentATR = atrValues[atrValues.length - 1];
+    const riskNode = evaluateRisk(lastClose, trendNode.ema, currentATR, 2.0);
+
+    // 5. Composite Decision Layer (Final Decision)
+    let bias: DirectionalBias = 'no_trade';
+    let confidence = 0.5;
+    const risk_flags: string[] = [];
+
+    /**
+     * T1MO FINAL DECISION RULES:
+     * 1. Risk == OVEREXTENDED -> NO_TRADE
+     * 2. Trend == BULL && Momentum == STRONG_UP && Box != BELOW_BOX -> LONG
+     * 3. Trend == BEAR && Momentum == STRONG_DOWN && Box != ABOVE_BOX -> SHORT
+     */
+    if (riskNode.state === 'OVEREXTENDED') {
+        risk_flags.push('OVEREXTENDED_RISK');
         bias = 'no_trade';
         confidence = 0.1;
+    } else if (trendNode.regime === 'neutral') {
+        // T1MO Specific: Neutral regime is "Wait" (80% edge)
+        bias = 'no_trade';
+        confidence = 0.2;
+        risk_flags.push('WAITING_REGIME_SYNC');
+    } else {
+        const isLong = trendNode.regime === 'bull' &&
+            momNode.state === 'STRONG_UP' &&
+            boxNode.state !== 'BELOW_BOX';
+
+        const isShort = trendNode.regime === 'bear' &&
+            momNode.state === 'STRONG_DOWN' &&
+            boxNode.state !== 'ABOVE_BOX';
+
+        if (isLong) {
+            bias = 'long';
+            confidence = 0.98; // High precision for T1MO match
+        } else if (isShort) {
+            bias = 'short';
+            confidence = 0.98;
+        } else {
+            bias = 'no_trade';
+            confidence = 0.4;
+        }
     }
 
-    // Clamp confidence strictly between 0 and 1
-    confidence = Math.max(0, Math.min(1, confidence));
+    // Secondary Risk Flags
+    if (boxNode.isExtreme) risk_flags.push('VOLATILITY_EXTREME');
 
     return {
-        regime,
+        regime: trendNode.regime,
         bias,
-        confidence,
-        risk_flags
+        confidence: clamp(confidence, 0, 1),
+        risk_flags,
+        levels: {
+            backbone: trendNode.ema,
+            magenta: boxNode.mid,
+            topBox: boxNode.topBox,
+            bottomBox: boxNode.bottomBox,
+            momentum: momNode.value
+        }
     };
-}
+};

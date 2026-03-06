@@ -1,35 +1,28 @@
-import { Regime } from '../../domain/signal';
-
-interface RiskInput {
-    regime: Regime;
-    volatilityAbnormal: boolean;
-    momentumExhausted: boolean;
-    distanceFromBaseline: number; // e.g., % distance from SMA50
+export interface RiskParams {
+    state: 'NORMAL' | 'OVEREXTENDED';
+    distance: number;
 }
 
 /**
- * Evaluates combined risk factors and returns an array of risk flags.
- * Pure function, deterministic.
+ * 4. Distance to Mean (Risk Filter)
+ * Fungsi: Deteksi overextension, Menentukan NO TRADE ZONE
+ * Logika: Jarak harga ke MA dibandingkan volatilitas normal (ATR)
  */
-export function evaluateRisk(input: RiskInput): string[] {
-    const flags: string[] = [];
+export const evaluateRisk = (
+    close: number,
+    ma: number,
+    atr: number,
+    maxMult: number = 2.0
+): RiskParams => {
+    // T1MO Logic: Absolute distance of price to backbone MA
+    const distance = Math.abs(close - ma);
 
-    if (input.volatilityAbnormal) {
-        flags.push('ABNORMAL_VOLATILITY');
+    let state: 'NORMAL' | 'OVEREXTENDED' = 'NORMAL';
+
+    // T1MO Logic: If distance > max_mult * atr -> OVEREXTENDED
+    if (distance > maxMult * atr) {
+        state = 'OVEREXTENDED';
     }
 
-    if (input.momentumExhausted) {
-        flags.push('MOMENTUM_EXHAUSTION');
-    }
-
-    if (Math.abs(input.distanceFromBaseline) > 0.15) {
-        // Price is more than 15% away from its 50-period baseline
-        flags.push('EXTREME_BASELINE_DIVERGENCE');
-    }
-
-    if (input.regime === 'late_trend') {
-        flags.push('LATE_TREND_INSTABILITY');
-    }
-
-    return flags;
-}
+    return { state, distance };
+};
