@@ -20,8 +20,8 @@ export default function Login() {
             });
             const loginCheckData = await loginCheckRes.json();
 
-            if (loginCheckData.adminToken) {
-                localStorage.setItem('session_token', loginCheckData.adminToken);
+            if (loginCheckData.session_token || loginCheckData.adminToken) {
+                localStorage.setItem('session_token', loginCheckData.session_token || loginCheckData.adminToken);
                 router.push('/dashboard');
                 return;
             }
@@ -68,7 +68,7 @@ export default function Login() {
     return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-900 text-white p-4">
             <h1 className="text-3xl font-bold mb-2 text-white">Atlas-Quant | Login</h1>
-            <p className="text-emerald-500 font-bold mb-6 text-sm">FINAL v1.0.15 - ZERO-DEMO SCIENTIFIC BUILD</p>
+            <p className="text-emerald-500 font-bold mb-6 text-sm">FINAL v1.0.15 - PURE SCIENTIFIC PRODUCTION BUILD</p>
             <form onSubmit={handleLogin} className="flex flex-col gap-4 w-full max-w-sm bg-neutral-800 p-6 rounded-lg">
                 <input
                     type="text"

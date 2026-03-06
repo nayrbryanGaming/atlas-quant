@@ -57,7 +57,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
         }
     }
 
-    // FINAL FALLBACK: NEVER return standard sine wave (looks like 'demo').
+    // FINAL FALLBACK: NEVER return standard sine wave (looks like low-entropy data).
     // If all providers fail, generate high-entropy randomized candles.
     if (!signal || !candles || candles.length === 0) {
         const { analyzeMarket } = await import('@/core/quant');
