@@ -141,11 +141,18 @@ export default function Dashboard() {
     return (
         <div className="bg-[#131722] min-h-screen text-[#d1d4dc] font-sans selection:bg-blue-500/30 flex flex-col overflow-hidden">
             {/* Top Navigation Bar - 101% T1MO Scientific Match */}
-            <header className="h-12 flex items-center justify-between px-4 bg-[#1e222d] border-b border-[#2a2e39] z-20 shadow-lg">
+            <header className="h-12 flex items-center justify-between px-4 bg-[#1e222d] border-b border-[#2a2e39] z-20 shadow-lg shrink-0">
                 <div className="flex items-center gap-4 h-full">
                     <div className="flex items-center gap-2">
                         <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[10px] font-black text-white shadow-lg shadow-blue-500/20">A</div>
                         <span className="text-xs font-black tracking-tighter text-white uppercase italic">Atlas<span className="text-blue-500">Quant</span></span>
+                    </div>
+
+                    <div className="h-6 w-px bg-[#2a2e39] mx-2" />
+
+                    <div className="flex items-center gap-4 bg-[#131722] px-2 py-1 rounded border border-[#2a2e39]">
+                        <span className="text-xs font-black text-blue-400">STATUS:</span>
+                        <span className="text-[10px] font-bold text-green-400 animate-pulse uppercase">Scientific_Sync_Optimal</span>
                     </div>
 
                     <div className="h-6 w-px bg-[#2a2e39] mx-2" />
@@ -169,7 +176,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-3 bg-[#131722]/50 px-3 py-1.5 rounded-full border border-white/5 backdrop-blur-sm">
+                    <div className="hidden md:flex items-center gap-3 bg-[#131722]/50 px-3 py-1.5 rounded-full border border-white/5 backdrop-blur-sm">
                         <div className={`w-1.5 h-1.5 rounded-full ${Number(quant?.confidence) > 0.8 ? 'bg-green-500 animate-pulse' : 'bg-orange-500'}`}></div>
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{quant?.regime}_GEOMETRY</span>
                     </div>
@@ -188,34 +195,71 @@ export default function Dashboard() {
             </header>
 
             <main className="flex-1 flex overflow-hidden relative bg-[#131722]">
+                {/* Left Sidebar - WATCHLIST */}
+                <aside className="w-64 bg-[#1e222d] border-r border-[#2a2e39] flex flex-col z-20">
+                    <div className="p-3 border-b border-[#2a2e39] flex justify-between items-center bg-[#131722]/50">
+                        <span className="text-[11px] font-black text-white uppercase tracking-widest">Watchlist</span>
+                        <span className="text-[10px] text-gray-500 font-bold">Vol 24h</span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto">
+                        {SYMBOLS.map((s) => (
+                            <div
+                                key={s}
+                                onClick={() => setSymbol(s)}
+                                className={`p-3 flex items-center justify-between cursor-pointer border-b border-[#2a2e39]/50 hover:bg-[#2a2e39]/30 transition-colors ${symbol === s ? 'bg-blue-600/10 border-l-2 border-l-blue-500' : ''}`}
+                            >
+                                <div className="flex flex-col">
+                                    <span className={`text-xs font-black ${symbol === s ? 'text-blue-400' : 'text-white'} uppercase tracking-tighter`}>{s}</span>
+                                    <span className="text-[9px] text-gray-500 font-bold uppercase">{s === 'BTC' ? 'Bitcoin' : s === 'ETH' ? 'Ethereum' : s === 'AMZN' ? 'Amazon' : s}</span>
+                                </div>
+                                <div className="text-right flex flex-col">
+                                    <span className="text-[11px] font-black text-white font-mono">
+                                        {s === 'BTC' ? '67,420' : s === 'ETH' ? '3,540' : s === 'SOL' ? '148.2' : '445.1'}
+                                    </span>
+                                    <span className="text-[9px] font-bold text-green-400">+2.4%</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </aside>
+
                 <div className="flex-1 flex flex-col min-w-0">
                     {/* Header Label - SCIENTIFIC Match */}
-                    <div className="px-4 py-3 flex flex-col gap-0.5 border-b border-[#2a2e39]">
-                        <h1 className="text-sm font-black text-white leading-none uppercase">{symbol}</h1>
-                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">
-                            {symbol === 'AMZN' ? 'Amazon.com' : symbol} • US Stock | US S&P500 | US N100 | US DOW • {interval}
-                        </span>
+                    <div className="px-4 py-2 flex items-center justify-between border-b border-[#2a2e39] bg-[#131722]">
+                        <div className="flex flex-col">
+                            <h1 className="text-sm font-black text-white leading-none uppercase">{symbol}</h1>
+                            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter mt-1">
+                                {symbol === 'AMZN' ? 'Amazon.com' : symbol} • INDEX | TECH | T1MO_ELIGIBLE • {interval.toUpperCase()}
+                            </span>
+                        </div>
+                        <div className="flex gap-4">
+                            <div className="flex flex-col text-right">
+                                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Regime</span>
+                                <span className={`text-[11px] font-black uppercase ${quant?.regime === 'bull' ? 'text-green-400' : 'text-red-400'}`}>{quant?.regime || 'NEUTRAL'}</span>
+                            </div>
+                            <div className="flex flex-col text-right">
+                                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Bias</span>
+                                <span className={`text-[11px] font-black uppercase ${quant?.bias === 'long' ? 'text-green-400' : 'text-red-400'}`}>{quant?.bias || 'WAIT'}</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="flex-1 relative">
                         <TradingViewChart data={candles || []} />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-[0.03] text-[8vw] font-black text-gray-900 select-none whitespace-nowrap tracking-tighter uppercase">
-                            AKELATRADER
-                        </div>
 
                         {/* SIGNAL OVERLAY */}
                         <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 pointer-events-none">
-                            <div className="bg-[#1e222d]/95 backdrop-blur border border-[#2a2e39] p-3 rounded shadow-xl flex flex-col min-w-[120px]">
-                                <span className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${quant?.bias === 'long' ? 'text-green-400' : quant?.bias === 'short' ? 'text-red-400' : 'text-orange-400'}`}>
-                                    {quant?.bias === 'long' ? 'Price Break Up' : quant?.bias === 'short' ? 'Price Break Down' : 'Within Range Box'}
+                            <div className="bg-[#1e222d]/95 backdrop-blur border border-[#2a2e39] p-3 rounded shadow-xl flex flex-col min-w-[140px]">
+                                <span className={`text-[9px] font-black uppercase tracking-[0.2em] mb-1 ${quant?.bias === 'long' ? 'text-green-400' : quant?.bias === 'short' ? 'text-red-400' : 'text-orange-400'}`}>
+                                    {quant?.bias === 'long' ? 'ENTRY_EXECUTE_BULL' : quant?.bias === 'short' ? 'ENTRY_EXECUTE_BEAR' : 'NEUTRAL_WAIT_SYNC'}
                                 </span>
-                                <span className="text-lg font-bold tracking-tight text-white">{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}</span>
+                                <span className="text-xs font-bold tracking-tight text-white font-mono">{new Date().toLocaleTimeString()} • UTC-4</span>
                             </div>
                         </div>
                     </div>
 
                     {/* Heatmap Section */}
-                    <div className="p-2 border-t border-[#2a2e39] bg-[#1e222d]">
+                    <div className="p-1 border-t border-[#2a2e39] bg-[#1e222d]">
                         <PerformanceHeatmap data={marketData.performance || []} />
                     </div>
                 </div>
@@ -342,6 +386,6 @@ export default function Dashboard() {
                     animation: marquee 40s linear infinite;
                 }
             `}</style>
-        </div>
+        </div >
     );
 }

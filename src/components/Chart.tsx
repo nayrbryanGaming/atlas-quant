@@ -28,7 +28,7 @@ export default function TradingViewChart({ data }: { data: any[] }) {
                     horzLines: { color: 'rgba(42, 46, 57, 0.5)', style: LineStyle.Dashed },
                 },
                 crosshair: {
-                    mode: CrosshairMode.Normal,
+                    mode: CrosshairMode.Magnet,
                     vertLine: {
                         width: 1,
                         color: '#758696',
@@ -62,11 +62,15 @@ export default function TradingViewChart({ data }: { data: any[] }) {
 
             // 1. Candlestick Series (Akela Scientific Style)
             const candlestickSeries = chart.addSeries(CandlestickSeries, {
-                upColor: '#089981',
-                downColor: '#f23645',
+                upColor: '#26a69a',
+                downColor: '#ef5350',
                 borderVisible: false,
-                wickUpColor: '#089981',
-                wickDownColor: '#f23645',
+                wickUpColor: '#26a69a',
+                wickDownColor: '#ef5350',
+                priceLineVisible: true,
+                priceLineWidth: 1,
+                priceLineColor: '#758696',
+                priceLineStyle: LineStyle.Dotted,
             });
 
             // 2. T1MO Reference Indicators
@@ -220,22 +224,27 @@ export default function TradingViewChart({ data }: { data: any[] }) {
             // T1MO Professional Legend Overlay (HMF, Backbone, Box)
             const legendOverlay = document.createElement('div');
             legendOverlay.style.position = 'absolute';
-            legendOverlay.style.top = '10px';
-            legendOverlay.style.left = '10px';
-            legendOverlay.style.zIndex = '10';
+            legendOverlay.style.top = '12px';
+            legendOverlay.style.left = '12px';
+            legendOverlay.style.zIndex = '30';
             legendOverlay.style.color = '#d1d4dc';
             legendOverlay.style.fontSize = '12px';
             legendOverlay.style.fontFamily = 'monospace';
             legendOverlay.style.pointerEvents = 'none';
             legendOverlay.innerHTML = `
-                <div style="display: flex; flex-direction: column; gap: 4px; background: rgba(30,34,45,0.7); padding: 8px; border-radius: 4px; border: 1px solid #2a2e39; backdrop-filter: blur(4px);">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="color: #00bcd4; font-weight: 900;">BACKBONE</span>
-                        <span style="font-weight: 900;">${processed[processed.length - 1].close.toFixed(2)}</span>
+                <div style="display: flex; flex-direction: column; gap: 6px; background: rgba(30,34,45,0.85); padding: 12px; border-radius: 4px; border: 1px solid #363c4e; backdrop-filter: blur(8px); min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                    <div style="display: flex; justify-between; align-items: center;">
+                        <span style="color: #00bcd4; font-weight: 900; letter-spacing: 1px;">BACKBONE</span>
+                        <span style="font-weight: 900; color: #fff;">${processed[processed.length - 1].close.toFixed(2)}</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="color: #e91e63; font-weight: 900;">MAGENTA</span>
-                        <span style="font-weight: 900;">STRUCTURE</span>
+                    <div style="display: flex; justify-between; align-items: center;">
+                        <span style="color: #e91e63; font-weight: 900; letter-spacing: 1px;">STRUCTURE</span>
+                        <span style="font-weight: 900; color: #fff;">${((ema10 - ema50) / ema50 * 100).toFixed(2)}%</span>
+                    </div>
+                    <div style="height: 1px; background: #363c4e; margin: 4px 0;"></div>
+                    <div style="display: flex; justify-between; align-items: center; opacity: 0.8;">
+                        <span style="color: #ff9800; font-size: 10px; font-weight: 800;">VOL_BOX_TOP</span>
+                        <span style="font-size: 10px; font-weight: 800;">${topBoxData[topBoxData.length - 1].value.toFixed(2)}</span>
                     </div>
                 </div>
             `;

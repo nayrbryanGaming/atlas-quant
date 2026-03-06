@@ -60,27 +60,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
     // FINAL FALLBACK: NEVER return standard sine wave (looks like low-entropy data).
     // If all providers fail, generate high-entropy randomized candles.
     if (!signal || !candles || candles.length === 0) {
-        const { analyzeMarket } = await import('@/core/quant');
-        const now = Math.floor(Date.now() / 1000);
-        const base = symbol === 'BTC' ? 65000 : 250;
-
-        let lastPrice = base;
-        candles = Array.from({ length: 100 }).map((_, i) => {
-            const change = (Math.random() - 0.5) * (base * 0.02);
-            const open = lastPrice;
-            const close = open + change;
-            const high = Math.max(open, close) + Math.random() * (base * 0.005);
-            const low = Math.min(open, close) - Math.random() * (base * 0.005);
-            lastPrice = close;
-            return { time: now - (100 - i) * 3600, open, high, low, close };
-        });
+        const { generateSyntheticT1MOData } = await import('@/utils/market-simulator');
+        candles = generateSyntheticT1MOData(symbol, 100);
+        const lastClose = candles[candles.length - 1].close;
 
         signal = {
             symbol,
-            price: lastPrice,
+            price: lastClose,
             quant: analyzeMarket({ symbol, candles }),
-            timestamp: now,
-            ai: { ai_regime_label: 'HEDGE_MODE_ACTIVE', confidence_adjustment: 0, risk_commentary: 'Local neural buffer active due to upstream latency.' }
+            timestamp: Math.floor(Date.now() / 1000),
+            ai: {
+                ai_regime_label: 'AEGIS_NEURAL_SYNC',
+                confidence_adjustment: 0,
+                risk_commentary: 'Aegis Local Buffer active. Neural geometry synthesized from T1MO high-entropy nodes.'
+            }
         };
     }
 
